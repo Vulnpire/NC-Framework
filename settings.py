@@ -1,13 +1,19 @@
+# ------------  Begin variables used in both client and c2 server code  ------------ #
+
+# Port c2 server listens on
 PORT = 1337
 
 # Path to use for signifying a command request from a client using HTTP GET
 CMD_REQUEST = "/book?isbn="
 
-# Path to use for signifying command output from a client using HTTP POST
-CMD_RESPONSE = "/inventory"
+# Path to use for signifying command output or errors from a client using HTTP POST
+RESPONSE = "/inventory"
+
+# Path to use for signifying the current working directory from a client using HTTP POST
+CWD_RESPONSE = "/title"
 
 # POST variable name to use for assigning to command output from a client
-CMD_RESPONSE_KEY = "index"
+RESPONSE_KEY = "index"
 
 # ----------------------  Begin c2 server code only variables  ---------------------- #
 
