@@ -6,7 +6,7 @@ HEADER = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/5
 # Set a proxy
 # PROXY = {"https": "proxy:8081"}
 PROXY = None
-PORT = 80
+PORT = 1337
 C2_SERVER = "localhost"
 
 x = get(f"http://{C2_SERVER}:{PORT}", headers=HEADER, proxies=PROXY)
