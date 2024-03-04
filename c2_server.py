@@ -1,9 +1,7 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = 1337
-
 BIND_ADDR = ""
-
 CMD_REQUEST = "/book?isbn="
 
 class C2Handler(BaseHTTPRequestHandler):
@@ -20,6 +18,9 @@ class C2Handler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
+    def log_request(self, code="-", size="-"):
+        ###
+        return
 
 server = HTTPServer((BIND_ADDR, PORT), C2Handler)
 
