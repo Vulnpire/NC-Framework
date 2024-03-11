@@ -1,7 +1,7 @@
-# ------------  Begin variables used in both client and c2 server code  ------------
+### ------------  Begin variables used in both client and c2 server code  ------------ ###
 
 # Port c2 server listens on
-PORT = 80
+PORT = 4444
 
 # This key must be 32 characters or fewer
 KEY = "U can't touch this!"
@@ -27,7 +27,7 @@ RESPONSE_KEY = "index"
 # Password used for encrypting and decrypting zip files; must be bytes data type
 ZIP_PASSWORD = b"*--->Red_Team_Op_1337<---*"
 
-# ----------------------  Begin c2 server code only variables  ----------------------
+### ----------------------  Begin c2 server code only variables  ---------------------- ###
 
 # Leave blank for binding to all interfaces, otherwise specify c2 server's IP address
 BIND_ADDR = ""
@@ -49,19 +49,18 @@ INPUT_TIMEOUT = None
 KEEP_ALIVE_CMD = "time /T"  # Windows client only
 # KEEP_ALIVE_CMD = "date +%R"  # Linux client only
 
-# Set shell for Linux
+# Set your shell based on your server's operating system
 SHELL = "/bin/bash"
-
-# Set shell for Windows
 # SHELL = "cmd.exe"
 
-# -----------------------  Begin client code only variables  ------------------------
+
+### -----------------------  Begin client code only variables  ------------------------ ###
 
 # Set the c2 server's IP address or hostname
 C2_SERVER = "localhost"
 
 # Define a sleep delay time in seconds for re-connection attempts
-DELAY = 3
+DELAY = 30
 
 # Set proxy to None or match target network's proxy using a Python dictionary format
 PROXY = None
