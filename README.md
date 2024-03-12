@@ -18,7 +18,7 @@ Setup and Configuration:
 
    Clone the NCF repository to your local machine:
      `
-     git clone https://github.com/byt3scr1b3/NC-Framework
+     git clone https://github.com/Vulnpire/NC-Framework
      `
    Setting Up the C2 Server:
 
